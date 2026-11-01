@@ -26,12 +26,14 @@ function rerollQuestion(n){
 }
 function priceValue(h){return h.priceType!=='待询价'&&h.currency==='CNY'&&Number.isFinite(h.priceLow)&&h.priceLow>0?h.priceLow:null}
 function priceLabel(h){
-  if(!Number.isFinite(h.priceLow)||h.priceLow<=0||h.priceType==='待询价')return '周末房价待询';
-  const currency=h.currency||'CNY',symbol={CNY:'¥',USD:'US$',EUR:'€',GBP:'£',JPY:'JP¥',HKD:'HK$',MOP:'MOP$'}[currency]||currency+' ';
-  return symbol+money(h.priceLow)+(h.priceHigh&&h.priceHigh>h.priceLow?'–'+symbol+money(h.priceHigh):'起');
+  const value=Number.isFinite(h.priceLow)&&h.priceLow>0?h.priceLow:h.originalPriceLow;
+  if(!Number.isFinite(value)||value<=0||h.priceType==='待询价')return '周末房价待询';
+  const currency=h.currency||'CNY',symbol={CNY:'¥',USD:'US$',EUR:'€',GBP:'£',JPY:'JP¥',HKD:'HK$',MOP:'MOP$',CAD:'CA$',AED:'AED '}[currency]||currency+' ';
+  const high=h.priceHigh||h.originalPriceHigh;
+  return symbol+money(value)+(high&&high>value?'–'+symbol+money(high):'起');
 }
-function priceMarkup(h){return `<span class="price ${priceValue(h)===null?'price-pending':''}">${esc(priceLabel(h))}<small>${h.priceType==='具体日期报价'?' / 晚 · 指定日期':h.priceType==='公开参考起价'?' / 晚 · 公开参考':' · 需按日期确认'}</small></span>`}
-function priceDetails(h){return `<div class="rate-details"><small>WEEKEND RATE CHECK · 周末价格核查</small><p>${esc(h.priceNote||'尚未取得可复核的周末基础房报价，已撤下原规划估值。')}</p><p>${esc(h.stayDates||'核查目标：2026-11-06 至 11-07；备选 11-07 至 11-08')}<br>${esc(h.roomBasis||'基础房 · 1 间 · 2 位成人 · 1 晚')}<br>${esc(h.taxNote||'税费、早餐和取消条款请在报价页确认')}</p>${h.priceSource?`<a class="source-link" href="${esc(h.priceSource)}" target="_blank" rel="noopener">打开价格来源，按日期查询 ↗</a>`:''}</div>`}
+function priceMarkup(h){return `<span class="price ${priceValue(h)===null?'price-pending':''}">${esc(priceLabel(h))}<small>${h.priceType==='具体日期报价'?' / 晚 · 对应日期公开样本':h.priceType==='公开参考起价'?' / 晚 · 公开参考':' · 需按日期确认'}${h.availabilityNote?' · 所选周末营业须确认':''}</small></span>`}
+function priceDetails(h){return `<div class="rate-details"><small>WEEKEND RATE CHECK · 周末价格核查</small><p>${esc(h.priceNote||'尚未取得可复核的周末基础房报价，已撤下原规划估值。')}</p>${h.availabilityNote?`<p class="match-notice">${esc(h.availabilityNote)}</p>`:''}<p>${esc(h.stayDates||'核查目标：2026-11-06 至 11-07；备选 11-07 至 11-08')}<br>${esc(h.roomBasis||'基础房 · 1 间 · 2 位成人 · 1 晚')}<br>${esc(h.taxNote||'税费、早餐和取消条款请在报价页确认')}<br>资料核查：${esc(h.priceChecked||'2026-10-30')}${h.currency&&h.currency!=='CNY'?' · 保留原币，未作人民币换算':''}</p>${priceValue(h)!==null&&config.budget!==999999&&priceValue(h)>config.budget?`<p>公开参考起价高于当前预算 ¥${money(priceValue(h)-config.budget)}，可调整预算或比较其他酒店。</p>`:''}${h.priceSource?`<a class="source-link" href="${esc(h.priceSource)}" target="_blank" rel="noopener">打开价格来源，按日期查询 ↗</a>`:''}</div>`}
 const app=document.getElementById('app'),dlg=document.getElementById('hotel-dialog');
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function scrollPage(top,smooth){try{window.scrollTo({top:top,behavior:smooth?'smooth':'auto'})}catch(error){window.scrollTo(0,top)}}
@@ -78,8 +80,8 @@ function profile(){const p={};Object.keys(T).forEach(k=>{p[k]=0});answers.forEac
 function topTaste(p=profile()){return Object.keys(p).sort((a,b)=>p[b]-p[a]).filter(k=>p[k]>0).slice(0,3)}
 function renderQuiz(){const q=Q[step];if(!q){toast('情境资料正在准备');go('home');return}const selected=Number.isInteger(answers[step])?answers[step]:undefined;const displayed=questionDraw(step);const taste=topTaste();app.innerHTML=`<section class="page"><div class="quiz-grid"><div><div class="progress-top"><span>YOUR PRIVATE JOURNEY</span><span><strong>${String(step+1).padStart(2,'0')}</strong> / ${Q.length}</span></div><div class="progress"><div style="width:${((step+1)/Q.length)*100}%"></div></div><div class="question"><div class="eyebrow">${esc(q.kicker)}</div><h1>${esc(q.title)}</h1><p class="scene">${esc(q.scene)}</p><div class="option-toolbar"><span>本幕从 ${q.options.length} 种选择中抽取 4 种</span><button class="text-btn" id="reroll-options">换一组 ↻</button></div><div class="options">${displayed.map((i,slot)=>{const o=q.options[i];return `<button class="option ${selected===i?'selected':''}" data-answer="${i}" aria-pressed="${selected===i}"><span class="letter">${String.fromCharCode(65+slot)}</span><span><strong>${esc(o.label)}</strong><p>${esc(o.detail)}</p></span></button>`}).join('')}</div><div class="quiz-actions"><button class="text-btn" id="previous">← ${step?'上一幕':'行程设定'}</button><button class="primary" id="next" ${selected===undefined?'disabled':''}>${step===Q.length-1?'揭晓私人甄选':'进入下一幕'} <span>→</span></button></div></div></div><aside class="brief"><div class="eyebrow">THE CONCIERGE NOTES</div><h3>Your travel dossier.</h3><div class="brief-name">品位，藏在每个取舍里。</div><p>每一道选择都会改变酒店的匹配顺序。将直觉交给自己，把细节交给这份甄选。</p><div class="brief-row"><span>目的地范围</span><b>${config.scope==='全部'?'全球甄选':config.scope==='国内'?'中国内地及港澳':'海外甄选'}</b></div><div class="brief-row"><span>每晚预算</span><b>${budgetLabel(config.budget)}</b></div><div class="brief-row"><span>已完成</span><b>${answeredCount()} / ${Q.length} 幕</b></div><div class="taste-pills">${taste.map(t=>`<span>${T[t]}</span>`).join('')}</div>${q.word?`<div class="glossary"><div class="eyebrow" style="font-size:8px">THE PRIVATE LEXICON</div><strong>${esc(q.word.term)}</strong><p>${esc(q.word.meaning)}</p></div>`:''}<button class="text-btn" data-go="home" style="margin-top:25px">保存进度，稍后继续 ↗</button></aside></div></section>`}
 function rankHotels(){
-  const p=profile();let pool=H.filter(h=>config.scope==='全部'||h.region===config.scope);matchNotice='';
-  if(!pool.length)pool=H.slice();
+  const p=profile(),open=H.filter(h=>!h.availabilityNote||!h.availabilityNote.includes('营业季外'));let pool=open.filter(h=>config.scope==='全部'||h.region===config.scope);matchNotice='';
+  if(!pool.length)pool=open.length?open.slice():H.slice();
   if(config.budget!==999999){
     const within=pool.filter(h=>priceValue(h)!==null&&priceValue(h)<=config.budget);
     if(within.length)pool=within;
